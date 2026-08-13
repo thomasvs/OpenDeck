@@ -32,6 +32,7 @@ impl Action for SwitchProfileAction {
 			device: settings
 				.device
 				.as_deref()
+				.filter(|d| !d.trim().is_empty())
 				.unwrap_or(&instance.device_id)
 				.to_owned(),
 			profile: settings.profile.as_deref().unwrap_or("Default").to_owned(),
@@ -64,6 +65,7 @@ impl Action for SwitchProfileAction {
 			device: settings
 				.device
 				.as_deref()
+				.filter(|d| !d.trim().is_empty())
 				.unwrap_or(&instance.device_id)
 				.to_owned(),
 			profile: profile.as_deref().unwrap_or("Default").to_owned(),
