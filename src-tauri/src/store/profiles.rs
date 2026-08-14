@@ -17,11 +17,16 @@ pub struct ProfileStores {
 
 impl ProfileStores {
 	fn canonical_id(device: &str, id: &str) -> String {
-		if cfg!(target_os = "windows") {
-			PathBuf::from(device).join(id.replace('/', "\\")).to_str().unwrap().to_owned()
-		} else {
-			PathBuf::from(device).join(id).to_str().unwrap().to_owned()
+		#[cfg(target_os = "windows")]
+		let id = &id.replace('/', "\\");
+		let profiles_dir = config_dir().join("profiles");
+		let raw_path = profiles_dir.join(device).join(format!("{id}.json"));
+		if let (Ok(real_path), Ok(profiles_canon)) = (fs::canonicalize(&raw_path), fs::canonicalize(&profiles_dir)) {
+			if let Ok(rel) = real_path.strip_prefix(&profiles_canon) {
+				return rel.with_extension("").to_string_lossy().into_owned();
+			}
 		}
+		PathBuf::from(device).join(id).to_str().unwrap().to_owned()
 	}
 
 	pub fn get_profile_store(&self, device: &DeviceInfo, id: &str) -> Result<&Store<Profile>, anyhow::Error> {
@@ -30,8 +35,13 @@ impl ProfileStores {
 
 	pub async fn get_profile_store_mut(&mut self, device: &DeviceInfo, id: &str) -> Result<&mut Store<Profile>, anyhow::Error> {
 		let canonical_id = Self::canonical_id(&device.id, id);
+		let target_keys = (device.rows * device.columns + device.touchpoints) as usize;
 		if self.stores.contains_key(&canonical_id) {
-			Ok(self.stores.get_mut(&canonical_id).unwrap())
+			let store = self.stores.get_mut(&canonical_id).unwrap();
+			if store.value.keys.len() < target_keys {
+				store.value.keys.resize(target_keys, None);
+			}
+			Ok(store)
 		} else {
 			let default = Profile {
 				id: id.to_owned(),
@@ -43,9 +53,15 @@ impl ProfileStores {
 			};
 
 			let mut store = Store::new(&canonical_id, &config_dir().join("profiles"), default).context(format!("Failed to create store for profile {}", canonical_id))?;
-			store.value.keys.resize((device.rows * device.columns + device.touchpoints) as usize, None);
-			store.value.sliders.resize(device.encoders as usize, None);
-			store.value.infobars.resize(device.infobars as usize, None);
+			if store.value.keys.len() < target_keys {
+				store.value.keys.resize(target_keys, None);
+			}
+			if store.value.sliders.len() < device.encoders as usize {
+				store.value.sliders.resize(device.encoders as usize, None);
+			}
+			if store.value.infobars.len() < device.infobars as usize {
+				store.value.infobars.resize(device.infobars as usize, None);
+			}
 
 			let categories = crate::shared::CATEGORIES.read().await;
 			let actions = categories.values().flat_map(|v| v.actions.iter()).collect::<Vec<_>>();
