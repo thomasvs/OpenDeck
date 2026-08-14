@@ -17,7 +17,7 @@
 				};
 
 				const device = document.getElementById("device");
-				device.value = inActionInfo.payload.settings.device ?? inActionInfo.device;
+				device.value = inActionInfo.payload.settings.device ?? "";
 				const profile = document.getElementById("profile");
 				profile.value = inActionInfo.payload.settings.profile ?? "Default";
 				const anticlockwise = document.getElementById("anticlockwise");
@@ -36,7 +36,7 @@
 							event: "setSettings",
 							context: inActionInfo.context,
 							payload: {
-								device: device.value ?? inActionInfo.device,
+								device: device.value,
 								profile: profile.value,
 								anticlockwise: anticlockwise.value,
 								clockwise: clockwise.value,
@@ -64,7 +64,7 @@
 	<body>
 		<div class="sdpi-item">
 			<div class="sdpi-item-label">Device ID</div>
-			<input id="device" list="devices" type="text" oninput="update()" class="sdpi-item-value" />
+			<input id="device" list="devices" type="text" placeholder="Current device (default)" oninput="update()" class="sdpi-item-value" />
 			<datalist id="devices"></datalist>
 		</div>
 		<div class="sdpi-item">

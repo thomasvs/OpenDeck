@@ -33,7 +33,7 @@
 	}
 
 	listen("switch_profile", async ({ payload }: { payload: { device: string; profile: string } }) => {
-		if (payload.device == value) {
+		if (!payload.device || payload.device == value) {
 			$profileManager?.setProfile(payload.profile);
 		} else {
 			await invoke("set_selected_profile", { device: payload.device, id: payload.profile });
