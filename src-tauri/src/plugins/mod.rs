@@ -3,7 +3,7 @@ pub mod manifest;
 mod webserver;
 
 use crate::APP_HANDLE;
-use crate::built_info::TARGET;
+use crate::built_info::{self, TARGET};
 use crate::shared::{CATEGORIES, Category, config_dir, convert_icon, is_flatpak, log_dir};
 
 use std::collections::HashMap;
@@ -412,20 +412,25 @@ pub fn initialise_plugins() {
 	let _ = fs::create_dir_all(&plugin_dir);
 	let _ = fs::create_dir_all(log_dir().join("plugins"));
 
+	let app_build_marker = plugin_dir.join(".app_build");
+	let current_build = format!("{}_{}", built_info::PKG_VERSION, built_info::GIT_COMMIT_HASH.unwrap_or(""));
+	let app_updated = cfg!(debug_assertions) || fs::read_to_string(&app_build_marker).map(|s| s != current_build).unwrap_or(true);
+
 	if let Ok(Ok(entries)) = APP_HANDLE.get().unwrap().path().resolve("plugins", tauri::path::BaseDirectory::Resource).map(fs::read_dir) {
 		for entry in entries.flatten() {
 			if let Err(error) = (|| -> Result<(), anyhow::Error> {
 				let builtin_version = semver::Version::parse(&serde_json::from_slice::<manifest::PluginManifest>(&fs::read(entry.path().join("manifest.json"))?)?.version)?;
 				let existing_path = plugin_dir.join(entry.file_name());
-				if (|| -> Result<(), anyhow::Error> {
-					let existing_version = semver::Version::parse(&serde_json::from_slice::<manifest::PluginManifest>(&fs::read(existing_path.join("manifest.json"))?)?.version)?;
-					if existing_version < builtin_version {
-						Err(anyhow::anyhow!("builtin version is newer than existing version"))
-					} else {
-						Ok(())
-					}
-				})()
-				.is_err()
+				if app_updated
+					|| (|| -> Result<(), anyhow::Error> {
+						let existing_version = semver::Version::parse(&serde_json::from_slice::<manifest::PluginManifest>(&fs::read(existing_path.join("manifest.json"))?)?.version)?;
+						if existing_version < builtin_version {
+							Err(anyhow::anyhow!("builtin version is newer than existing version"))
+						} else {
+							Ok(())
+						}
+					})()
+					.is_err()
 				{
 					if existing_path.exists() {
 						fs::rename(&existing_path, existing_path.with_extension("old"))?;
@@ -440,6 +445,7 @@ pub fn initialise_plugins() {
 				error!("Failed to upgrade builtin plugin {}: {}", entry.file_name().to_string_lossy(), error);
 			}
 		}
+		let _ = fs::write(&app_build_marker, current_build);
 	}
 
 	let entries = match fs::read_dir(&plugin_dir) {
